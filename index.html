@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>放課後トライ - 席替えアプリ</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for Sound Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Canvas Confetti for Celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* カスタムアニメーション */
+        @keyframes shuffle-bounce {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-4px) scale(1.03); }
+        }
+
+        .shuffling {
+            animation: shuffle-bounce 0.15s infinite;
+        }
+
+        /* 3年生・4年生の境界スタイル */
+        .desk-3rd {
+            background-color: #fff5f5;
+            border: 2px solid #f87171;
+            box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.1), 0 2px 4px -1px rgba(239, 68, 68, 0.06);
+        }
+
+        .desk-4th {
+            background-color: #eff6ff;
+            border: 2px solid #60a5fa;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1), 0 2px 4px -1px rgba(59, 130, 246, 0.06);
+        }
+
+        .chair-3rd {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1.5px solid #fca5a5;
+        }
+
+        .chair-4th {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1.5px solid #93c5fd;
+        }
+
+        /* スマホ向け視認性向上 */
+        .seat-number {
+            font-size: 1.25rem;
+            line-height: 1.75rem;
+            font-weight: 900;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 pb-12">
+    <!-- ヘッダー -->
+    <header class="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white shadow-lg sticky top-0 z-30">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white text-orange-600 p-2 rounded-2xl shadow-inner font-black text-xl">
+                    <i class="fa-solid fa-shapes"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black tracking-wider drop-shadow">放課後トライ</h1>
+                    <p class="text-xs text-orange-100 font-bold">わくわく席替えアプリ</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="soundToggleBtn" onclick="toggleSound()" class="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-full text-xs md:text-sm font-bold backdrop-blur flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-volume-high" id="soundIcon"></i>
+                    <span id="soundText">音 ON</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="max-w-4xl mx-auto px-3 pt-4 flex flex-col gap-4">
+        
+        <!-- コントロールエリア -->
+        <section class="bg-white p-4 rounded-3xl shadow-sm border border-slate-200">
+            <button id="startBtn" onclick="startSeatingChange()" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xl md:text-2xl rounded-2xl shadow-lg shadow-emerald-500/30 transform active:scale-95 transition-all flex items-center justify-center gap-3">
+                <i class="fa-solid fa-play"></i>
+                席替えスタート！
+            </button>
+
+            <div class="grid grid-cols-2 gap-2 mt-3">
+                <button onclick="resetSeats()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    順番に並べる
+                </button>
+                <button onclick="window.print()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-print"></i>
+                    印刷・保存
+                </button>
+            </div>
+        </section>
+
+        <!-- 教室の座席レイアウト -->
+        <section class="bg-white p-4 md:p-6 rounded-3xl shadow-sm border border-slate-200 relative">
+            
+            <!-- 黒板・前方インジケーター -->
+            <div class="mb-4 text-center relative">
+                <div class="w-full md:w-3/4 mx-auto bg-slate-700 text-white font-bold py-2 px-4 rounded-b-xl shadow-md border-b-4 border-slate-900 flex items-center justify-center gap-2 text-sm md:text-base">
+                    <i class="fa-solid fa-chalkboard"></i>
+                    <span>前 方 （ 黒 板 ）</span>
+                </div>
+            </div>
+
+            <!-- 凡例・カラーガイド -->
+            <div class="flex justify-center gap-3 mb-4 text-xs">
+                <div class="flex items-center gap-1.5 bg-red-50 border border-red-200 px-3 py-1 rounded-full font-bold text-red-600">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                    前5卓: 3年生 (1〜10)
+                </div>
+                <div class="flex items-center gap-1.5 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full font-bold text-blue-600">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                    後6卓: 4年生 (1〜12)
+                </div>
+            </div>
+
+            <!-- 教室座席配置マップ -->
+            <div id="classroomMap" class="space-y-3 max-w-xl mx-auto">
+                <!-- JSでデスクおよび座席を動的に生成します -->
+            </div>
+
+            <!-- 入口表示（後方） -->
+            <div class="mt-6 border-t-2 border-dashed border-slate-300 pt-3 flex justify-center">
+                <div class="bg-slate-100 text-slate-600 text-xs font-bold px-6 py-1 rounded-t-lg border border-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-door-open"></i>
+                    出 入 口
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JavaScript ロジック -->
+    <script>
+        // デスクと学年エリアの配置データ定義 (手書き画像を正確に反映)
+        const deskLayout = [
+            // Row 1
+            { id: 1, row: 1, side: 'left', grade: 3, label: '卓1' },
+            { id: 2, row: 1, side: 'right', grade: 3, label: '卓2' },
+            // Row 2
+            { id: 3, row: 2, side: 'left', grade: 3, label: '卓3' },
+            { id: 4, row: 2, side: 'right', grade: 3, label: '卓4' },
+            // Row 3 (左が3年、右が4年)
+            { id: 5, row: 3, side: 'left', grade: 3, label: '卓5' },
+            { id: 6, row: 3, side: 'right', grade: 4, label: '卓6' },
+            // Row 4
+            { id: 7, row: 4, side: 'left', grade: 4, label: '卓7' },
+            { id: 8, row: 4, side: 'right', grade: 4, label: '卓8' },
+            // Row 5
+            { id: 9, row: 5, side: 'left', grade: 4, label: '卓9' },
+            { id: 10, row: 5, side: 'right', grade: 4, label: '卓10' },
+            // Row 6
+            { id: 11, row: 6, side: 'left', grade: 4, label: '卓11' }
+        ];
+
+        // 3年生: 1〜10、4年生: 1〜12 の数字のみのリスト
+        const list3rdDefault = Array.from({ length: 10 }, (_, i) => `${i + 1}`);
+        const list4thDefault = Array.from({ length: 12 }, (_, i) => `${i + 1}`);
+
+        // 状態管理
+        let soundEnabled = true;
+        let isShuffling = false;
+        let currentAssignments = {}; // seatId -> number string
+
+        // Tone.jsのサウンド設定
+        let synth, polySynth;
+
+        function initAudio() {
+            if (!synth) {
+                synth = new Tone.Synth().toDestination();
+                polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
+                polySynth.volume.value = -6;
+            }
+        }
+
+        // 楽しいスタートサウンド＆効果音
+        function playStartSound() {
+            if (!soundEnabled) return;
+            Tone.start();
+            initAudio();
+
+            const now = Tone.now();
+            const notes = ["C4", "E4", "G4", "C5", "E5", "G5", "C6"];
+            notes.forEach((note, index) => {
+                synth.triggerAttackRelease(note, "16n", now + index * 0.05);
+            });
+        }
+
+        // シャッフル中の音
+        function playTickSound() {
+            if (!soundEnabled) return;
+            initAudio();
+            const notes = ["C3", "E3", "G3", "C4"];
+            const randomNote = notes[Math.floor(Math.random() * notes.length)];
+            synth.triggerAttackRelease(randomNote, "32n", undefined, 0.15);
+        }
+
+        // 完了ファンファーレ
+        function playFanfareSound() {
+            if (!soundEnabled) return;
+            initAudio();
+            const now = Tone.now();
+            polySynth.triggerAttackRelease(["C4", "E4", "G4"], "8n", now);
+            polySynth.triggerAttackRelease(["F4", "A4", "C5"], "8n", now + 0.12);
+            polySynth.triggerAttackRelease(["G4", "B4", "D5"], "8n", now + 0.24);
+            polySynth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "4n", now + 0.36);
+        }
+
+        // サウンド切り替え
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('soundIcon');
+            const text = document.getElementById('soundText');
+            if (soundEnabled) {
+                icon.className = 'fa-solid fa-volume-high';
+                text.innerText = '音 ON';
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark';
+                text.innerText = '音 OFF';
+            }
+        }
+
+        // 初期描画
+        window.onload = function() {
+            renderClassroomMap();
+            assignInitialSeats();
+        };
+
+        // 教室レイアウトのレンダリング
+        function renderClassroomMap() {
+            const container = document.getElementById('classroomMap');
+            container.innerHTML = '';
+
+            // 行ごとにグループ化 (行1〜6)
+            for (let r = 1; r <= 6; r++) {
+                const rowDesks = deskLayout.filter(d => d.row === r);
+                const rowDiv = document.createElement('div');
+                rowDiv.className = "grid grid-cols-2 gap-3 md:gap-4 w-full";
+
+                const leftDesk = rowDesks.find(d => d.side === 'left');
+                const rightDesk = rowDesks.find(d => d.side === 'right');
+
+                // 左側
+                const leftCol = document.createElement('div');
+                leftCol.className = "w-full";
+                if (leftDesk) {
+                    leftCol.appendChild(createDeskElement(leftDesk));
+                }
+                rowDiv.appendChild(leftCol);
+
+                // 右側
+                const rightCol = document.createElement('div');
+                rightCol.className = "w-full";
+                if (rightDesk) {
+                    rightCol.appendChild(createDeskElement(rightDesk));
+                } else {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = "h-full min-h-[70px] border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center text-slate-300 text-xs italic bg-slate-50/50";
+                    emptyDiv.innerText = "（なし）";
+                    rightCol.appendChild(emptyDiv);
+                }
+                rowDiv.appendChild(rightCol);
+
+                container.appendChild(rowDiv);
+            }
+        }
+
+        // デスクHTML要素の生成
+        function createDeskElement(desk) {
+            const is3rd = desk.grade === 3;
+            const card = document.createElement('div');
+            card.className = `p-2 md:p-2.5 rounded-2xl transition-all duration-300 ${is3rd ? 'desk-3rd' : 'desk-4th'}`;
+            card.id = `desk-${desk.id}`;
+
+            // デスクヘッダー
+            const header = document.createElement('div');
+            header.className = "flex justify-between items-center mb-1.5 px-1";
+            header.innerHTML = `
+                <span class="text-[10px] font-black px-1.5 py-0.5 rounded-full ${is3rd ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}">
+                    ${is3rd ? '3年' : '4年'}
+                </span>
+                <span class="text-[10px] font-bold text-slate-400">${desk.label}</span>
+            `;
+            card.appendChild(header);
+
+            // 長机と2席の並び
+            const seatsGrid = document.createElement('div');
+            seatsGrid.className = "grid grid-cols-2 gap-1.5";
+
+            for (let seatIndex = 1; seatIndex <= 2; seatIndex++) {
+                const seatId = `${desk.id}-${seatIndex}`;
+                const seatBtn = document.createElement('div');
+                seatBtn.id = `seat-${seatId}`;
+                seatBtn.className = `py-2 px-1 rounded-xl font-bold text-center transition-all duration-200 flex flex-col justify-center items-center shadow-sm ${is3rd ? 'chair-3rd' : 'chair-4th'}`;
+                
+                seatBtn.innerHTML = `
+                    <span class="seat-name seat-number">--</span>
+                `;
+                seatsGrid.appendChild(seatBtn);
+            }
+
+            card.appendChild(seatsGrid);
+            return card;
+        }
+
+        // 初期配置
+        function assignInitialSeats() {
+            const seats3rd = [];
+            const seats4th = [];
+
+            deskLayout.forEach(desk => {
+                for (let i = 1; i <= 2; i++) {
+                    const seatId = `${desk.id}-${i}`;
+                    if (desk.grade === 3) {
+                        seats3rd.push(seatId);
+                    } else {
+                        seats4th.push(seatId);
+                    }
+                }
+            });
+
+            currentAssignments = {};
+
+            seats3rd.forEach((seatId, idx) => {
+                currentAssignments[seatId] = list3rdDefault[idx] || "ー";
+            });
+
+            seats4th.forEach((seatId, idx) => {
+                currentAssignments[seatId] = list4thDefault[idx] || "ー";
+            });
+
+            updateSeatUI();
+        }
+
+        // UI更新
+        function updateSeatUI(tempAssignments = null) {
+            const data = tempAssignments || currentAssignments;
+            for (const [seatId, name] of Object.entries(data)) {
+                const seatEl = document.getElementById(`seat-${seatId}`);
+                if (seatEl) {
+                    const nameSpan = seatEl.querySelector('.seat-name');
+                    if (nameSpan) {
+                        nameSpan.innerText = name;
+                    }
+                }
+            }
+        }
+
+        // フィッシャー–イェーツ シャッフル
+        function shuffleArray(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // 席替えスタート処理
+        function startSeatingChange() {
+            if (isShuffling) return;
+
+            isShuffling = true;
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            playStartSound();
+
+            const seats3rd = [];
+            const seats4th = [];
+            deskLayout.forEach(desk => {
+                for (let i = 1; i <= 2; i++) {
+                    const seatId = `${desk.id}-${i}`;
+                    if (desk.grade === 3) seats3rd.push(seatId);
+                    else seats4th.push(seatId);
+                }
+            });
+
+            const shuffled3rd = shuffleArray(list3rdDefault);
+            const shuffled4th = shuffleArray(list4thDefault);
+
+            const finalAssignments = {};
+            seats3rd.forEach((seatId, idx) => {
+                finalAssignments[seatId] = shuffled3rd[idx] || "ー";
+            });
+            seats4th.forEach((seatId, idx) => {
+                finalAssignments[seatId] = shuffled4th[idx] || "ー";
+            });
+
+            const allSeatElements = document.querySelectorAll('[id^="seat-"]');
+            allSeatElements.forEach(el => el.classList.add('shuffling'));
+
+            let duration = 2200;
+            let intervalTime = 60;
+            let elapsed = 0;
+
+            const timer = setInterval(() => {
+                elapsed += intervalTime;
+                
+                const tempAssignments = {};
+                const tempShuffled3rd = shuffleArray(list3rdDefault);
+                const tempShuffled4th = shuffleArray(list4thDefault);
+
+                seats3rd.forEach((seatId, idx) => {
+                    tempAssignments[seatId] = tempShuffled3rd[idx % tempShuffled3rd.length];
+                });
+                seats4th.forEach((seatId, idx) => {
+                    tempAssignments[seatId] = tempShuffled4th[idx % tempShuffled4th.length];
+                });
+
+                updateSeatUI(tempAssignments);
+                playTickSound();
+
+                if (elapsed >= duration) {
+                    clearInterval(timer);
+                    currentAssignments = finalAssignments;
+                    updateSeatUI();
+
+                    allSeatElements.forEach(el => el.classList.remove('shuffling'));
+                    
+                    playFanfareSound();
+                    triggerConfetti();
+
+                    isShuffling = false;
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            }, intervalTime);
+        }
+
+        // リセット
+        function resetSeats() {
+            if (isShuffling) return;
+            assignInitialSeats();
+        }
+
+        // 紙吹雪
+        function triggerConfetti() {
+            confetti({
+                particleCount: 80,
+                spread: 60,
+                origin: { y: 0.6 }
+            });
+        }
+    </script>
+</body>
+</html>
